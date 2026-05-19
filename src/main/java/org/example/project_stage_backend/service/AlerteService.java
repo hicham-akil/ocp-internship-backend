@@ -6,6 +6,7 @@ import org.example.project_stage_backend.dto.AlerteDTO;
 import org.example.project_stage_backend.entity.Alerte;
 import org.example.project_stage_backend.entity.Alerte.Severite;
 import org.example.project_stage_backend.entity.IndicateursCalcules;
+import org.example.project_stage_backend.entity.Perte;
 import org.example.project_stage_backend.repository.AlerteRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -33,49 +34,49 @@ public class AlerteService {
     @Value("${n8n.webhook.url}")
     private String n8nWebhookUrl;
 
-
     private static final Map<String, double[]> SEUILS_MAX = Map.of(
-            "SE",               new double[]{0.60, 0.90},   // p90=0.57, p99=1.00
-            "SYN",              new double[]{0.78, 0.86},   // p90=0.77, p99=0.855
-            "INT",              new double[]{0.21, 0.23},   // p90=0.21, p99=0.23
-            "CONSO_H2SO4",      new double[]{3.2,  3.8},    // pas de données dans Excel — inchangé
-            "CONSO_EAU_BRUTE",  new double[]{15.0, 18.0},   // idem
-            "CONSO_PHOSPHATES", new double[]{3.5,  4.2},    // idem
-            "CONSO_VAPEUR",     new double[]{1.2,  1.5}     // idem
+            "SE",               new double[]{0.60, 0.90},
+            "SYN",              new double[]{0.78, 0.86},
+            "INT",              new double[]{0.21, 0.23},
+            "CONSO_H2SO4",      new double[]{3.2,  3.8},
+            "CONSO_EAU_BRUTE",  new double[]{15.0, 18.0},
+            "CONSO_PHOSPHATES", new double[]{3.5,  4.2},
+            "CONSO_VAPEUR",     new double[]{1.2,  1.5}
     );
 
     private static final Map<String, double[]> SEUILS_MIN = Map.of(
-            "RC", new double[]{0.93, 0.90},   // mean=0.933, min=0.877
-            "RI", new double[]{0.85, 0.80}    // pas de données dans Excel — inchangé
+            "RC", new double[]{0.93, 0.90},
+            "RI", new double[]{0.85, 0.80}
     );
 
-    // ── Point d'entrée principal ──────────────────────────────────
-    // Appelé par IndicateurService après chaque calcul
-
-    public void verifierEtCreerAlertes(IndicateursCalcules ind) {
+    public void verifierEtCreerAlertes(IndicateursCalcules ind, Perte perte) {
         List<Alerte> alertes = new ArrayList<>();
 
+        // SE / SYN / INT — perte values (were missing before)
+        if (perte != null) {
+            verifierMax(alertes, "SE",  perte.getSe(),     ind.getDate());
+            verifierMax(alertes, "SYN", perte.getSyn(),    ind.getDate());
+            verifierMax(alertes, "INT", perte.getIntVal(), ind.getDate());
+        }
 
+        // Consommations
         verifierMax(alertes, "CONSO_H2SO4",      ind.getConsoH2so4(),      ind.getDate());
         verifierMax(alertes, "CONSO_EAU_BRUTE",  ind.getConsoEauBrute(),   ind.getDate());
         verifierMax(alertes, "CONSO_PHOSPHATES", ind.getConsoPhosphates(), ind.getDate());
         verifierMax(alertes, "CONSO_VAPEUR",     ind.getConsoVapeur(),     ind.getDate());
 
-        // Vérifications MIN (trop bas = mauvais)
+        // Rendements
         verifierMin(alertes, "RC", ind.getRc(), ind.getDate());
         verifierMin(alertes, "RI", ind.getRi(), ind.getDate());
 
         if (alertes.isEmpty()) return;
 
-        // Sauvegarder en base
         List<Alerte> saved = alerteRepo.saveAll(alertes);
         log.info("{} alerte(s) créée(s) pour date={}", saved.size(), ind.getDate());
 
-        // Broadcast WebSocket → dashboard React
         List<AlerteDTO> dtos = saved.stream().map(AlerteDTO::from).collect(Collectors.toList());
         messagingTemplate.convertAndSend("/topic/alertes", dtos);
 
-        // Appeler n8n pour chaque alerte CRITICAL
         saved.stream()
                 .filter(a -> a.getSeverite() == Severite.CRITICAL)
                 .forEach(this::notifierN8n);
@@ -84,11 +85,12 @@ public class AlerteService {
     private void verifierMax(List<Alerte> alertes, String type, Double valeur, LocalDateTime date) {
         if (valeur == null) return;
         double[] seuils = SEUILS_MAX.get(type);
+        if (seuils == null) return;
 
         Severite sev = null;
         double seuilRef = 0;
 
-        if (valeur >= seuils[1]) { sev = Severite.CRITICAL; seuilRef = seuils[1]; }
+        if (valeur >= seuils[1])      { sev = Severite.CRITICAL; seuilRef = seuils[1]; }
         else if (valeur >= seuils[0]) { sev = Severite.WARNING;  seuilRef = seuils[0]; }
 
         if (sev != null) alertes.add(creerAlerte(date, type, valeur, seuilRef, sev));
@@ -97,11 +99,12 @@ public class AlerteService {
     private void verifierMin(List<Alerte> alertes, String type, Double valeur, LocalDateTime date) {
         if (valeur == null) return;
         double[] seuils = SEUILS_MIN.get(type);
+        if (seuils == null) return;
 
         Severite sev = null;
         double seuilRef = 0;
 
-        if (valeur <= seuils[1]) { sev = Severite.CRITICAL; seuilRef = seuils[1]; }
+        if (valeur <= seuils[1])      { sev = Severite.CRITICAL; seuilRef = seuils[1]; }
         else if (valeur <= seuils[0]) { sev = Severite.WARNING;  seuilRef = seuils[0]; }
 
         if (sev != null) alertes.add(creerAlerte(date, type, valeur, seuilRef, sev));
@@ -118,8 +121,6 @@ public class AlerteService {
                 .acquittee(false)
                 .build();
     }
-
-    // ── n8n webhook ───────────────────────────────────────────────
 
     private void notifierN8n(Alerte alerte) {
         String key = alerte.getTypeIndicateur();
@@ -148,8 +149,6 @@ public class AlerteService {
             log.error("Échec notification n8n : {}", e.getMessage());
         }
     }
-
-    // ── Lecture ───────────────────────────────────────────────────
 
     public List<AlerteDTO> getAlertesNonAcquittees() {
         return alerteRepo.findTop50ByAcquitteeOrderByDateDesc(false)
