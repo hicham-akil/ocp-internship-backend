@@ -251,11 +251,11 @@ public class RapportService {
                                 String label, String value, CellStyle valStyle) {
         XSSFRichTextString rts = new XSSFRichTextString();
         XSSFFont lf = wb.createFont();
-        lf.setFontHeightInPoints((short) 7); lf.setBold(true);
-        lf.setColor(new XSSFColor(new byte[]{(byte)148,(byte)163,(byte)184}, null));
+        lf.setFontHeightInPoints((short) 8); lf.setBold(true);
+        lf.setColor(IndexedColors.BLACK.getIndex());
         XSSFFont vf = wb.createFont();
-        vf.setFontHeightInPoints((short) 12); vf.setBold(true);
-        vf.setColor(new XSSFColor(new byte[]{0,(byte)232,122}, null));
+        vf.setFontHeightInPoints((short) 11); vf.setBold(false);
+        vf.setColor(IndexedColors.BLACK.getIndex());
         rts.append(label + "\n", lf);
         rts.append(value, vf);
         Cell c = row.createCell(col);
@@ -304,16 +304,14 @@ public class RapportService {
 
     record StatBlock(double min, double max, double avg) {}
 
-    // ── Style factories (unchanged) ───────────────────────────────
+    // ── Style factories ───────────────────────────────────────────
 
     private CellStyle createTitleStyle(XSSFWorkbook wb) {
         CellStyle s = wb.createCellStyle();
         XSSFFont f = wb.createFont();
-        f.setBold(true); f.setFontHeightInPoints((short) 18);
-        f.setColor(new XSSFColor(new byte[]{0, (byte)232, 122}, null));
-        s.setFont(f); s.setAlignment(HorizontalAlignment.CENTER);
-        s.setFillForegroundColor(new XSSFColor(new byte[]{6, 13, 26}, null));
-        s.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        f.setBold(true); f.setFontHeightInPoints((short) 16);
+        f.setColor(IndexedColors.BLACK.getIndex());
+        s.setFont(f); s.setAlignment(HorizontalAlignment.LEFT);
         return s;
     }
 
@@ -321,10 +319,9 @@ public class RapportService {
         CellStyle s = wb.createCellStyle();
         XSSFFont f = wb.createFont();
         f.setFontHeightInPoints((short) 10);
-        f.setColor(new XSSFColor(new byte[]{(byte)148,(byte)163,(byte)184}, null));
-        s.setFont(f); s.setAlignment(HorizontalAlignment.CENTER);
-        s.setFillForegroundColor(new XSSFColor(new byte[]{6, 13, 26}, null));
-        s.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        f.setColor(IndexedColors.BLACK.getIndex());
+        f.setItalic(true);
+        s.setFont(f); s.setAlignment(HorizontalAlignment.LEFT);
         return s;
     }
 
@@ -332,9 +329,9 @@ public class RapportService {
         CellStyle s = wb.createCellStyle();
         XSSFFont f = wb.createFont();
         f.setBold(true); f.setFontHeightInPoints((short) 11);
-        f.setColor(new XSSFColor(new byte[]{0,(byte)232,122}, null));
+        f.setColor(IndexedColors.BLACK.getIndex());
         s.setFont(f);
-        s.setFillForegroundColor(new XSSFColor(new byte[]{15,23,42}, null));
+        s.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
         s.setFillPattern(FillPatternType.SOLID_FOREGROUND);
         return s;
     }
@@ -343,11 +340,11 @@ public class RapportService {
         CellStyle s = wb.createCellStyle();
         XSSFFont f = wb.createFont();
         f.setBold(true); f.setFontHeightInPoints((short) 9);
-        f.setColor(new XSSFColor(new byte[]{0,(byte)232,122}, null));
+        f.setColor(IndexedColors.BLACK.getIndex());
         s.setFont(f); s.setAlignment(HorizontalAlignment.CENTER);
-        s.setFillForegroundColor(new XSSFColor(new byte[]{15,23,42}, null));
+        s.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
         s.setFillPattern(FillPatternType.SOLID_FOREGROUND);
-        setBorder(s, BorderStyle.THIN, new XSSFColor(new byte[]{51,65,85}, null));
+        setBorder(s, BorderStyle.THIN, IndexedColors.BLACK.getIndex());
         return s;
     }
 
@@ -357,15 +354,13 @@ public class RapportService {
         f.setFontHeightInPoints((short) 9);
         if (alert) {
             f.setBold(true);
-            f.setColor(new XSSFColor(new byte[]{(byte)251,(byte)191,36}, null));
-            s.setFillForegroundColor(new XSSFColor(new byte[]{45,25,0}, null));
+            f.setColor(IndexedColors.RED.getIndex());
         } else {
-            f.setColor(new XSSFColor(new byte[]{(byte)148,(byte)163,(byte)184}, null));
-            s.setFillForegroundColor(new XSSFColor(new byte[]{6,13,26}, null));
+            f.setColor(IndexedColors.BLACK.getIndex());
         }
-        s.setFont(f); s.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        s.setFont(f);
         s.setAlignment(HorizontalAlignment.CENTER);
-        setBorder(s, BorderStyle.THIN, new XSSFColor(new byte[]{51,65,85}, null));
+        setBorder(s, BorderStyle.THIN, IndexedColors.BLACK.getIndex());
         return s;
     }
 
@@ -373,34 +368,27 @@ public class RapportService {
         CellStyle s = wb.createCellStyle();
         XSSFFont f = wb.createFont();
         f.setFontHeightInPoints((short) 9);
-        f.setColor(new XSSFColor(new byte[]{(byte)148,(byte)163,(byte)184}, null));
+        f.setColor(IndexedColors.BLACK.getIndex());
         s.setFont(f);
-        s.setFillForegroundColor(new XSSFColor(new byte[]{15,23,42}, null));
-        s.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        s.setFillForegroundColor(IndexedColors.WHITE.getIndex());
+        s.setFillPattern(FillPatternType.NO_FILL);
         s.setAlignment(HorizontalAlignment.CENTER);
-        setBorder(s, BorderStyle.THIN, new XSSFColor(new byte[]{51,65,85}, null));
+        setBorder(s, BorderStyle.THIN, IndexedColors.BLACK.getIndex());
         return s;
     }
 
     private CellStyle createInfoValueStyle(XSSFWorkbook wb) {
         CellStyle s = wb.createCellStyle();
-        XSSFFont f = wb.createFont();
-        f.setBold(true); f.setFontHeightInPoints((short) 12);
-        f.setColor(new XSSFColor(new byte[]{0,(byte)232,122}, null));
-        s.setFont(f); s.setAlignment(HorizontalAlignment.CENTER);
+        s.setAlignment(HorizontalAlignment.LEFT);
         s.setVerticalAlignment(VerticalAlignment.CENTER);
-        s.setFillForegroundColor(new XSSFColor(new byte[]{15,23,42}, null));
-        s.setFillPattern(FillPatternType.SOLID_FOREGROUND);
-        setBorder(s, BorderStyle.THIN, new XSSFColor(new byte[]{51,65,85}, null));
+        setBorder(s, BorderStyle.THIN, IndexedColors.BLACK.getIndex());
         return s;
     }
 
-    private void setBorder(CellStyle s, BorderStyle bs, XSSFColor color) {
+    private void setBorder(CellStyle s, BorderStyle bs, short colorIndex) {
         s.setBorderTop(bs); s.setBorderBottom(bs);
         s.setBorderLeft(bs); s.setBorderRight(bs);
-        if (s instanceof XSSFCellStyle xs) {
-            xs.setTopBorderColor(color); xs.setBottomBorderColor(color);
-            xs.setLeftBorderColor(color); xs.setRightBorderColor(color);
-        }
+        s.setTopBorderColor(colorIndex); s.setBottomBorderColor(colorIndex);
+        s.setLeftBorderColor(colorIndex); s.setRightBorderColor(colorIndex);
     }
 }
