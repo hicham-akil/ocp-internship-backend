@@ -19,46 +19,46 @@ public class IngestController {
     private final IndicateurService indicateurService;
     private final SimpMessagingTemplate messagingTemplate;
 
+    // ingestComplet is intentionally different:
+    // it broadcasts all 4 raw inputs immediately (before DB save),
+    // so the frontend sees them in real time without waiting for calculation.
+    // The service does NOT re-broadcast for this path.
     @PostMapping("/complet")
     public ResponseEntity<IndicateursDTO> ingestComplet(@RequestBody DonneesCompleteDTO dto) {
         log.info("POST /ingest/complet reçu — date={}", dto.getAnalyseGypse().getDate());
 
-        // ✅ Broadcast INPUT immédiatement en temps réel
-        messagingTemplate.convertAndSend("/topic/input/gypse",      dto.getAnalyseGypse());
-        messagingTemplate.convertAndSend("/topic/input/phosphate",   dto.getAnalysePhosphate());
-        messagingTemplate.convertAndSend("/topic/input/production",  dto.getProduction());
-        messagingTemplate.convertAndSend("/topic/input/consommation",dto.getConsommation());
+        messagingTemplate.convertAndSend("/topic/input/gypse",       dto.getAnalyseGypse());
+        messagingTemplate.convertAndSend("/topic/input/phosphate",    dto.getAnalysePhosphate());
+        messagingTemplate.convertAndSend("/topic/input/production",   dto.getProduction());
+        messagingTemplate.convertAndSend("/topic/input/consommation", dto.getConsommation());
 
-        // ✅ Traitement + sauvegarde DB + broadcast OUTPUT via IndicateurService
         IndicateursDTO result = indicateurService.ingestDonneesCompletes(dto);
-
         return ResponseEntity.ok(result);
     }
 
+    // Individual endpoints: broadcast is handled inside the service.
+    // No convertAndSend here — removing the duplicates.
+
     @PostMapping("/gypse")
     public ResponseEntity<IndicateursDTO> ingestGypse(@RequestBody AnalyseGypseDTO dto) {
-        messagingTemplate.convertAndSend("/topic/input/gypse", dto);
         IndicateursDTO result = indicateurService.ingestGypse(dto);
         return result != null ? ResponseEntity.ok(result) : ResponseEntity.accepted().build();
     }
 
     @PostMapping("/phosphate")
     public ResponseEntity<IndicateursDTO> ingestPhosphate(@RequestBody AnalysePhosphateDTO dto) {
-        messagingTemplate.convertAndSend("/topic/input/phosphate", dto);
         IndicateursDTO result = indicateurService.ingestPhosphate(dto);
         return result != null ? ResponseEntity.ok(result) : ResponseEntity.accepted().build();
     }
 
     @PostMapping("/production")
     public ResponseEntity<IndicateursDTO> ingestProduction(@RequestBody ProductionDTO dto) {
-        messagingTemplate.convertAndSend("/topic/input/production", dto);
         IndicateursDTO result = indicateurService.ingestProduction(dto);
         return result != null ? ResponseEntity.ok(result) : ResponseEntity.accepted().build();
     }
 
     @PostMapping("/consommation")
     public ResponseEntity<IndicateursDTO> ingestConsommation(@RequestBody ConsommationDTO dto) {
-        messagingTemplate.convertAndSend("/topic/input/consommation", dto);
         IndicateursDTO result = indicateurService.ingestConsommation(dto);
         return result != null ? ResponseEntity.ok(result) : ResponseEntity.accepted().build();
     }
@@ -69,7 +69,8 @@ public class IngestController {
         return result != null ? ResponseEntity.ok(result) : ResponseEntity.accepted().build();
     }
 
-    // ── GET endpoints (inchangés) ──────────────────────────────
+    // ── GET endpoints (inchangés) ──────────────────────────────────────────
+
     @GetMapping("/gypse/dernier")
     public ResponseEntity<AnalyseGypseDTO> getDernierGypse() {
         return indicateurService.getDernierGypse()

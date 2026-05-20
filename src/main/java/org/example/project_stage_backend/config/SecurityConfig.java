@@ -48,9 +48,9 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
+                        .requestMatchers(   "/ingest/**").permitAll()
                         .requestMatchers("/auth/**").permitAll()
                         .requestMatchers("/ws-jfc1/**").permitAll()
-                        .requestMatchers("/ingest/**").permitAll()
                         .requestMatchers(
                                 org.springframework.http.HttpMethod.POST,
                                 "/ingest/perte"
