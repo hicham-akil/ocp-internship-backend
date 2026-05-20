@@ -50,6 +50,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/auth/**").permitAll()
                         .requestMatchers("/ws-jfc1/**").permitAll()
+                        .requestMatchers("/ingest/**").permitAll()
                         .requestMatchers(
                                 org.springframework.http.HttpMethod.POST,
                                 "/ingest/perte"
