@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.xssf.usermodel.*;
+import org.example.project_stage_backend.config.SeuilConfig;
 import org.example.project_stage_backend.dto.IndicateursDTO;
 import org.example.project_stage_backend.dto.PerteDTO;
 import org.springframework.stereotype.Service;
@@ -24,12 +25,9 @@ public class RapportService {
     private static final DateTimeFormatter FMT =
             DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
 
-    // Merged view of both tables for one timestamp
     record LigneRapport(
             LocalDateTime date,
-            // Pertes
             Double se, Double syn, Double intVal,
-            // Indicateurs calculés
             Double rc, Double ri, Double cap,
             Double consoH2so4, Double consoEauBrute,
             Double consoPhosphates, Double consoVapeur
@@ -42,11 +40,9 @@ public class RapportService {
         List<IndicateursDTO> indicateurs =
                 indicateurService.getIndicateursSurPeriode(debut, fin);
 
-        // Fetch pertes over same period via existing repo method exposed in service
         List<PerteDTO> pertes =
                 indicateurService.getPertesSurPeriode(debut, fin);
 
-        // Join by closest date (within 1 min) — simple approach: map pertes by truncated minute
         Map<LocalDateTime, PerteDTO> perteByMinute = pertes.stream()
                 .collect(Collectors.toMap(
                         p -> p.getDate().withSecond(0).withNano(0),
@@ -67,6 +63,14 @@ public class RapportService {
             );
         }).collect(Collectors.toList());
 
+        // Pull warning thresholds once — used for both display strings and predicates
+        final double seuilSE   = SeuilConfig.warningMax("SE");
+        final double seuilSYN  = SeuilConfig.warningMax("SYN");
+        final double seuilINT  = SeuilConfig.warningMax("INT");
+        final double seuilRC   = SeuilConfig.warningMin("RC");
+        final double seuilRI   = SeuilConfig.warningMin("RI");
+        final double seuilH2   = SeuilConfig.warningMax("CONSO_H2SO4");
+
         try (XSSFWorkbook wb = new XSSFWorkbook();
              ByteArrayOutputStream out = new ByteArrayOutputStream()) {
 
@@ -79,7 +83,7 @@ public class RapportService {
             CellStyle sectionStyle  = createSectionStyle(wb);
             CellStyle infoValStyle  = createInfoValueStyle(wb);
 
-            // ── Sheet 1 : Résumé ────────────────────────────────
+            // ── Sheet 1 : Résumé ─────────────────────────────────────────────
             XSSFSheet resume = wb.createSheet("Résumé");
             resume.setColumnWidth(0, 9000);
             for (int c = 1; c <= 4; c++) resume.setColumnWidth(c, 4000);
@@ -105,36 +109,48 @@ public class RapportService {
             rInfo.setHeightInPoints(36);
             createInfoCell(wb, rInfo, 0, "PÉRIODE DÉBUT", debut.format(FMT), infoValStyle);
             createInfoCell(wb, rInfo, 1, "PÉRIODE FIN",   fin.format(FMT),   infoValStyle);
-            createInfoCell(wb, rInfo, 2, "RELEVÉS",        String.valueOf(lignes.size()), infoValStyle);
+            createInfoCell(wb, rInfo, 2, "RELEVÉS",       String.valueOf(lignes.size()), infoValStyle);
 
             row++;
 
-            // ── Stats Pertes ────────────────────────────────────
+            // ── Stats Pertes ─────────────────────────────────────────────────
             addSectionTitle(resume, row++, "◉  RÉSUMÉ — PERTES GYPSE", sectionStyle);
 
             Row rHdr1 = resume.createRow(row++);
-            for (int i = 0; i < new String[]{"INDICATEUR","MIN","MAX","MOYENNE","SEUIL"}.length; i++) {
+            for (int i = 0; i < 5; i++) {
                 Cell c = rHdr1.createCell(i);
                 c.setCellValue(new String[]{"INDICATEUR","MIN","MAX","MOYENNE","SEUIL"}[i]);
                 c.setCellStyle(headerStyle);
             }
 
             if (!lignes.isEmpty()) {
+                // Display string and predicate both derived from the same SeuilConfig value
                 addStatRow(resume, row++, "SE — Perte Séchage",
-                        calcStat(lignes, LigneRapport::se), "≤ 1.5", normalStyle, alertStyle, s -> s.avg() > 1.5);
+                        calcStat(lignes, LigneRapport::se),
+                        "≤ " + seuilSE,
+                        normalStyle, alertStyle,
+                        s -> s.avg() > seuilSE);
+
                 addStatRow(resume, row++, "SYN — Perte Synthèse",
-                        calcStat(lignes, LigneRapport::syn), "≤ 1.8", normalStyle, alertStyle, s -> s.avg() > 1.8);
+                        calcStat(lignes, LigneRapport::syn),
+                        "≤ " + seuilSYN,
+                        normalStyle, alertStyle,
+                        s -> s.avg() > seuilSYN);
+
                 addStatRow(resume, row++, "INT — Perte Intermédiaire",
-                        calcStat(lignes, LigneRapport::intVal), "≤ 1.2", normalStyle, alertStyle, s -> s.avg() > 1.2);
+                        calcStat(lignes, LigneRapport::intVal),
+                        "≤ " + seuilINT,
+                        normalStyle, alertStyle,
+                        s -> s.avg() > seuilINT);
             }
 
             row++;
 
-            // ── Stats Indicateurs ───────────────────────────────
+            // ── Stats Indicateurs ────────────────────────────────────────────
             addSectionTitle(resume, row++, "◉  RÉSUMÉ — INDICATEURS CALCULÉS", sectionStyle);
 
             Row rHdr2 = resume.createRow(row++);
-            for (int i = 0; i < new String[]{"INDICATEUR","MIN","MAX","MOYENNE","SEUIL"}.length; i++) {
+            for (int i = 0; i < 5; i++) {
                 Cell c = rHdr2.createCell(i);
                 c.setCellValue(new String[]{"INDICATEUR","MIN","MAX","MOYENNE","SEUIL"}[i]);
                 c.setCellStyle(headerStyle);
@@ -142,38 +158,68 @@ public class RapportService {
 
             if (!lignes.isEmpty()) {
                 addStatRow(resume, row++, "RC — Rendement Conc.",
-                        calcStat(lignes, LigneRapport::rc), "≥ 0.90", normalStyle, alertStyle, s -> s.avg() < 0.90);
+                        calcStat(lignes, LigneRapport::rc),
+                        "≥ " + seuilRC,
+                        normalStyle, alertStyle,
+                        s -> s.avg() < seuilRC);
+
                 addStatRow(resume, row++, "RI — Rendement Incorp.",
-                        calcStat(lignes, LigneRapport::ri), "≥ 0.85", normalStyle, alertStyle, s -> s.avg() < 0.85);
+                        calcStat(lignes, LigneRapport::ri),
+                        "≥ " + seuilRI,
+                        normalStyle, alertStyle,
+                        s -> s.avg() < seuilRI);
+
+                // CAP has no threshold in SeuilConfig — kept as a display-only row
                 addStatRow(resume, row++, "CAP — Capacité Prod.",
-                        calcStat(lignes, LigneRapport::cap), "≥ 1.0",  normalStyle, alertStyle, s -> s.avg() < 1.0);
+                        calcStat(lignes, LigneRapport::cap),
+                        "—",
+                        normalStyle, alertStyle,
+                        s -> false);
             }
 
             row++;
 
-            // ── Alertes ─────────────────────────────────────────
+            // ── Alertes ──────────────────────────────────────────────────────
             addSectionTitle(resume, row++, "⚠  ANALYSE DES DÉPASSEMENTS", sectionStyle);
 
             Row rAHdr = resume.createRow(row++);
-            for (int i = 0; i < new String[]{"INDICATEUR","NB DÉPASSEMENTS","TOTAL","TAUX (%)","CRITIQUE"}.length; i++) {
+            for (int i = 0; i < 5; i++) {
                 Cell c = rAHdr.createCell(i);
                 c.setCellValue(new String[]{"INDICATEUR","NB DÉPASSEMENTS","TOTAL","TAUX (%)","CRITIQUE"}[i]);
                 c.setCellStyle(headerStyle);
             }
 
             int total = lignes.size();
-            addAlerteRow(resume, row++, "SE  (≤ 1.5)",  count(lignes, l -> l.se()     != null && l.se()     > 1.5),  total, normalStyle, alertStyle);
-            addAlerteRow(resume, row++, "SYN (≤ 1.8)",  count(lignes, l -> l.syn()    != null && l.syn()    > 1.8),  total, normalStyle, alertStyle);
-            addAlerteRow(resume, row++, "INT (≤ 1.2)",  count(lignes, l -> l.intVal() != null && l.intVal() > 1.2),  total, normalStyle, alertStyle);
-            addAlerteRow(resume, row++, "RC  (≥ 0.90)", count(lignes, l -> l.rc()     != null && l.rc()     < 0.90), total, normalStyle, alertStyle);
-            addAlerteRow(resume, row++, "RI  (≥ 0.85)", count(lignes, l -> l.ri()     != null && l.ri()     < 0.85), total, normalStyle, alertStyle);
+            addAlerteRow(resume, row++,
+                    "SE  (≤ " + seuilSE + ")",
+                    count(lignes, l -> l.se()     != null && l.se()     > seuilSE),
+                    total, normalStyle, alertStyle);
 
-            // ── Sheet 2 : Historique ────────────────────────────
+            addAlerteRow(resume, row++,
+                    "SYN (≤ " + seuilSYN + ")",
+                    count(lignes, l -> l.syn()    != null && l.syn()    > seuilSYN),
+                    total, normalStyle, alertStyle);
+
+            addAlerteRow(resume, row++,
+                    "INT (≤ " + seuilINT + ")",
+                    count(lignes, l -> l.intVal() != null && l.intVal() > seuilINT),
+                    total, normalStyle, alertStyle);
+
+            addAlerteRow(resume, row++,
+                    "RC  (≥ " + seuilRC + ")",
+                    count(lignes, l -> l.rc()     != null && l.rc()     < seuilRC),
+                    total, normalStyle, alertStyle);
+
+            addAlerteRow(resume, row++,
+                    "RI  (≥ " + seuilRI + ")",
+                    count(lignes, l -> l.ri()     != null && l.ri()     < seuilRI),
+                    total, normalStyle, alertStyle);
+
+            // ── Sheet 2 : Historique ─────────────────────────────────────────
             XSSFSheet hist = wb.createSheet("Historique Détaillé");
             hist.setColumnWidth(0, 6500);
             int[] colWidths = {3200, 3200, 3200, 3200, 3200, 3200, 3500, 3500, 3500, 3500};
             for (int i = 0; i < colWidths.length; i++) hist.setColumnWidth(i + 1, colWidths[i]);
-
             hist.createFreezePane(0, 1);
 
             Row hHdr = hist.createRow(0);
@@ -192,13 +238,13 @@ public class RapportService {
                 pair = !pair;
 
                 setCellStr(r, 0,  l.date() != null ? l.date().format(FMT) : "—", base);
-                setCellNum(r, 1,  l.se(),        base, alertStyle, v -> v > 1.5);
-                setCellNum(r, 2,  l.syn(),       base, alertStyle, v -> v > 1.8);
-                setCellNum(r, 3,  l.intVal(),    base, alertStyle, v -> v > 1.2);
-                setCellNum(r, 4,  l.rc(),        base, alertStyle, v -> v < 0.90);
-                setCellNum(r, 5,  l.ri(),        base, alertStyle, v -> v < 0.85);
-                setCellNum(r, 6,  l.cap(),       base, alertStyle, v -> v < 1.0);
-                setCellNum(r, 7,  l.consoH2so4(),      base, alertStyle, v -> v > 3.2);
+                setCellNum(r, 1,  l.se(),        base, alertStyle, v -> v > seuilSE);
+                setCellNum(r, 2,  l.syn(),       base, alertStyle, v -> v > seuilSYN);
+                setCellNum(r, 3,  l.intVal(),    base, alertStyle, v -> v > seuilINT);
+                setCellNum(r, 4,  l.rc(),        base, alertStyle, v -> v < seuilRC);
+                setCellNum(r, 5,  l.ri(),        base, alertStyle, v -> v < seuilRI);
+                setCellNum(r, 6,  l.cap(),       base, alertStyle, v -> false);
+                setCellNum(r, 7,  l.consoH2so4(),      base, alertStyle, v -> v > seuilH2);
                 setCellNum(r, 8,  l.consoEauBrute(),   base, alertStyle, v -> false);
                 setCellNum(r, 9,  l.consoPhosphates(), base, alertStyle, v -> false);
                 setCellNum(r, 10, l.consoVapeur(),     base, alertStyle, v -> false);
@@ -211,7 +257,7 @@ public class RapportService {
         }
     }
 
-    // ── Helpers ───────────────────────────────────────────────────
+    // ── Helpers (inchangés) ───────────────────────────────────────────────
 
     private void addSectionTitle(Sheet sheet, int rowIdx, String title, CellStyle style) {
         Row r = sheet.createRow(rowIdx);
@@ -303,8 +349,6 @@ public class RapportService {
     }
 
     record StatBlock(double min, double max, double avg) {}
-
-    // ── Style factories ───────────────────────────────────────────
 
     private CellStyle createTitleStyle(XSSFWorkbook wb) {
         CellStyle s = wb.createCellStyle();
