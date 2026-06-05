@@ -55,6 +55,15 @@
         }
 
         @Transactional
+        public void supprimerPerte(Long id) {
+            if (!perteRepo.existsById(id)) {
+                throw new IllegalArgumentException("Perte introuvable avec l'id : " + id);
+            }
+            perteRepo.deleteById(id);
+            log.info("Perte supprimée avec l'id : {}", id);
+        }
+
+        @Transactional
         public IndicateursDTO ingestGypse(AnalyseGypseDTO dto) {
             AnalyseGypse gypse = sauvegarderGypse(dto);
             messagingTemplate.convertAndSend("/topic/input/gypse", dto);
@@ -147,6 +156,103 @@
         public List<PerteDTO> getPertesSurPeriode(LocalDateTime debut, LocalDateTime fin) {
             return perteRepo.findByDateBetweenOrderByDateAsc(debut, fin)
                     .stream().map(this::toPerteDTO).collect(Collectors.toList());
+        }
+
+        @Transactional(readOnly = true)
+        public ComparaisonDTO comparerPeriodes(LocalDateTime d1, LocalDateTime f1, LocalDateTime d2, LocalDateTime f2) {
+            if (d1.isAfter(f1) || d2.isAfter(f2)) {
+                throw new IllegalArgumentException("La date de début doit être antérieure à la date de fin.");
+            }
+
+            List<IndicateursCalcules> p1Entities = indicateursRepo.findByDateBetweenOrderByDateAsc(d1, f1);
+            List<IndicateursCalcules> p2Entities = indicateursRepo.findByDateBetweenOrderByDateAsc(d2, f2);
+
+            PeriodeDataDTO periode1 = processPeriode("Période 1", d1, f1, p1Entities);
+            PeriodeDataDTO periode2 = processPeriode("Période 2", d2, f2, p2Entities);
+
+            DeltaDTO delta = DeltaDTO.builder()
+                    .rc(calculateDelta(periode1.getStats().getRc(), periode2.getStats().getRc()))
+                    .ri(calculateDelta(periode1.getStats().getRi(), periode2.getStats().getRi()))
+                    .cap(calculateDelta(periode1.getStats().getCap(), periode2.getStats().getCap()))
+                    .consoH2so4(calculateDelta(periode1.getStats().getConsoH2so4(), periode2.getStats().getConsoH2so4()))
+                    .consoEauBrute(calculateDelta(periode1.getStats().getConsoEauBrute(), periode2.getStats().getConsoEauBrute()))
+                    .consoPhosphates(calculateDelta(periode1.getStats().getConsoPhosphates(), periode2.getStats().getConsoPhosphates()))
+                    .consoVapeur(calculateDelta(periode1.getStats().getConsoVapeur(), periode2.getStats().getConsoVapeur()))
+                    .build();
+
+            return ComparaisonDTO.builder()
+                    .periode1(periode1)
+                    .periode2(periode2)
+                    .delta(delta)
+                    .alertPeriode1(countAlerts(p1Entities))
+                    .alertPeriode2(countAlerts(p2Entities))
+                    .build();
+        }
+
+        private PeriodeDataDTO processPeriode(String label, LocalDateTime debut, LocalDateTime fin, List<IndicateursCalcules> entities) {
+            List<IndicateurPointDTO> points = entities.stream()
+                    .map(e -> IndicateurPointDTO.builder()
+                            .offsetMinutes(java.time.Duration.between(debut, e.getDate()).toMinutes())
+                            .originalDate(e.getDate())
+                            .rc(e.getRc())
+                            .ri(e.getRi())
+                            .cap(e.getCap())
+                            .consoH2so4(e.getConsoH2so4())
+                            .consoEauBrute(e.getConsoEauBrute())
+                            .consoPhosphates(e.getConsoPhosphates())
+                            .consoVapeur(e.getConsoVapeur())
+                            .build())
+                    .collect(Collectors.toList());
+
+            IndicateurStatsDTO stats = IndicateurStatsDTO.builder()
+                    .rc(calculateStats(entities.stream().map(IndicateursCalcules::getRc).collect(Collectors.toList())))
+                    .ri(calculateStats(entities.stream().map(IndicateursCalcules::getRi).collect(Collectors.toList())))
+                    .cap(calculateStats(entities.stream().map(IndicateursCalcules::getCap).collect(Collectors.toList())))
+                    .consoH2so4(calculateStats(entities.stream().map(IndicateursCalcules::getConsoH2so4).collect(Collectors.toList())))
+                    .consoEauBrute(calculateStats(entities.stream().map(IndicateursCalcules::getConsoEauBrute).collect(Collectors.toList())))
+                    .consoPhosphates(calculateStats(entities.stream().map(IndicateursCalcules::getConsoPhosphates).collect(Collectors.toList())))
+                    .consoVapeur(calculateStats(entities.stream().map(IndicateursCalcules::getConsoVapeur).collect(Collectors.toList())))
+                    .build();
+
+            return PeriodeDataDTO.builder()
+                    .label(label)
+                    .debut(debut)
+                    .fin(fin)
+                    .points(points)
+                    .stats(stats)
+                    .build();
+        }
+
+        private StatsDTO calculateStats(List<Double> values) {
+            List<Double> nonNullValues = values.stream().filter(v -> v != null).collect(Collectors.toList());
+            if (nonNullValues.isEmpty()) return null;
+
+            double min = nonNullValues.stream().mapToDouble(v -> v).min().orElse(0.0);
+            double max = nonNullValues.stream().mapToDouble(v -> v).max().orElse(0.0);
+            double avg = nonNullValues.stream().mapToDouble(v -> v).average().orElse(0.0);
+
+            double variance = nonNullValues.stream()
+                    .mapToDouble(v -> Math.pow(v - avg, 2))
+                    .average().orElse(0.0);
+            double stddev = Math.sqrt(variance);
+
+            return StatsDTO.builder()
+                    .min(arrondir(min))
+                    .max(arrondir(max))
+                    .avg(arrondir(avg))
+                    .stddev(arrondir(stddev))
+                    .build();
+        }
+
+        private Double calculateDelta(StatsDTO s1, StatsDTO s2) {
+            if (s1 == null || s2 == null || s1.getAvg() == null || s2.getAvg() == null) return null;
+            return arrondir(s2.getAvg() - s1.getAvg());
+        }
+
+        private Long countAlerts(List<IndicateursCalcules> entities) {
+            return entities.stream()
+                    .filter(e -> (e.getRc() != null && e.getRc() < 0.95) || (e.getRi() != null && e.getRi() < 0.94))
+                    .count();
         }
 
         // ── MOTEUR DE CALCUL ──────────────────────────────────────────

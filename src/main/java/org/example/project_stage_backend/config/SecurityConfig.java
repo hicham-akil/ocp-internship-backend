@@ -55,6 +55,10 @@ public class SecurityConfig {
                                 org.springframework.http.HttpMethod.POST,
                                 "/ingest/perte"
                         ).hasRole("LABO")
+                        .requestMatchers(
+                                org.springframework.http.HttpMethod.DELETE,
+                                "/ingest/perte/**"
+                        ).hasRole("LABO")
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);

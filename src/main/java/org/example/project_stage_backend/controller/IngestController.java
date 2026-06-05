@@ -69,6 +69,13 @@ public class IngestController {
         return result != null ? ResponseEntity.ok(result) : ResponseEntity.accepted().build();
     }
 
+    @DeleteMapping("/perte/{id}")
+    public ResponseEntity<Void> deletePerte(@PathVariable Long id) {
+        log.info("DELETE /ingest/perte/{} reçu", id);
+        indicateurService.supprimerPerte(id);
+        return ResponseEntity.noContent().build();
+    }
+
     // ── GET endpoints (inchangés) ──────────────────────────────
     @GetMapping("/gypse/dernier")
     public ResponseEntity<AnalyseGypseDTO> getDernierGypse() {
