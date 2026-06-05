@@ -403,6 +403,7 @@
 
         private PerteDTO toPerteDTO(Perte e) {
             return PerteDTO.builder()
+            .id(e.getId())
                     .date(e.getDate())
                     .se(e.getSe())
                     .syn(e.getSyn())

@@ -11,6 +11,7 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Builder
 public class PerteDTO {
+    private Long id;
     private LocalDateTime date;
     private Double se;
     private Double syn;
