@@ -43,7 +43,6 @@ public class IndicateurController {
     }
 
     @GetMapping("/comparaison")
-    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ComparaisonDTO> comparerPeriodes(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime debut1,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fin1,
