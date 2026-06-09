@@ -61,6 +61,11 @@ public class SecurityConfig {
         "/ingest/perte"
     ).hasRole("LABO")
 
+    .requestMatchers(
+        org.springframework.http.HttpMethod.PUT,
+        "/seuils/**"
+    ).hasAnyRole("VIEWER", "LABO")
+
     .requestMatchers("/ingest/**").permitAll()
 
     .anyRequest().authenticated()

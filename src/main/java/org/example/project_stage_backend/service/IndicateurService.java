@@ -22,6 +22,7 @@
         private static final long TOLERANCE_MINUTES = 1L;
 
         private final AlerteService                 alerteService;
+        private final SeuilService                  seuilService;
         private final PredictionService             predictionService;
         private final AnalyseGypseRepository        gypseRepo;
         private final AnalysePhosphateRepository    phosphateRepo;
@@ -251,7 +252,7 @@
 
         private Long countAlerts(List<IndicateursCalcules> entities) {
             return entities.stream()
-                    .filter(e -> (e.getRc() != null && e.getRc() < 0.95) || (e.getRi() != null && e.getRi() < 0.94))
+                    .filter(e -> seuilService.isEnAlerte("rc", e.getRc()) || seuilService.isEnAlerte("ri", e.getRi()))
                     .count();
         }
 
