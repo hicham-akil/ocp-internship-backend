@@ -288,58 +288,65 @@
             return result;
         }
 
-        private IndicateursCalcules calculer(
-                LocalDateTime dateRef,
-                AnalyseGypse gypse,
-                AnalysePhosphate phosphate,
-                Production production,
-                Consommation conso) {
+      private IndicateursCalcules calculer(LocalDateTime dateRef,AnalyseGypse gypse,AnalysePhosphate phosphate,Production production,Consommation conso) {
+    // --- Données gypse : moyenne des deux lignes A et B ---
+    Double p2o5Gypse = moyenne(gypse.getP2o5GypseA(), gypse.getP2o5GypseB());
+    Double caOGypse  = moyenne(gypse.getCaOGypseA(),  gypse.getCaOGypseB());
 
-            log.info("CALCULATION START for {}", dateRef);
+    // --- Données phosphate ---
+    Double p2o5Phosphate = phosphate.getP2o5Phosphate();
+    Double caOPhosphate  = phosphate.getCaOPhosphate();
+    Double qPhosphate    = phosphate.getQPhosphate();
 
-            Double p2o5Gypse = moyenne(gypse.getP2o5GypseA(), gypse.getP2o5GypseB());
-            Double caOGypse  = moyenne(gypse.getCaOGypseA(),  gypse.getCaOGypseB());
+    // --- Débits de production ---
+    Double q29 = production.getQP2o529(); // Ligne acide 29%
+    Double q54 = production.getQP2o554(); // Ligne acide 54%
 
-            Double p2o5Phosphate = phosphate.getP2o5Phosphate();
-            Double caOPhosphate  = phosphate.getCaOPhosphate();
-            Double qPhosphate    = phosphate.getQPhosphate();
+    // --- Consommations de réactifs ---
+    Double h2so4  = conso.getQteH2so4();
+    Double eau    = conso.getQteEauBrute();
+    Double phosph = conso.getQtePhosphates();
+    Double vapeur = conso.getQteVapeur();
 
-            Double q29    = production.getQP2o529();
-            Double q54    = production.getQP2o554();
-            Double h2so4  = conso.getQteH2so4();
-            Double eau    = conso.getQteEauBrute();
-            Double phosph = conso.getQtePhosphates();
-            Double vapeur = conso.getQteVapeur();
+    // --- RC : Rendement de Concentration ---
+    // Formule : RC = 1 - (P2O5_gypse * CaO_phosphate) / (P2O5_phosphate * CaO_gypse)
+    // Protégé contre null et division par zéro
+    Double rc = null;
+    if (p2o5Gypse != null && caOPhosphate != null && p2o5Phosphate != null
+            && caOGypse != null && p2o5Phosphate != 0 && caOGypse != 0) {
+        rc = 1.0 - ((p2o5Gypse * caOPhosphate) / (p2o5Phosphate * caOGypse));
+    }
 
-            Double rc = null;
-            if (p2o5Gypse != null && caOPhosphate != null && p2o5Phosphate != null
-                    && caOGypse != null && p2o5Phosphate != 0 && caOGypse != 0) {
-                rc = 1.0 - ((p2o5Gypse * caOPhosphate) / (p2o5Phosphate * caOGypse));
-            }
+    // --- RI : Rendement d'Incorporation ---
+    // Formule : RI = Q_P2O5_29 / ((P2O5_phosphate * Q_phosphate) / 100)
+    Double ri = null;
+    if (q29 != null && p2o5Phosphate != null && qPhosphate != null) {
+        Double denom = (p2o5Phosphate * qPhosphate) / 100.0;
+        if (denom != 0) ri = q29 / denom;
+    }
 
-            Double ri = null;
-            if (q29 != null && p2o5Phosphate != null && qPhosphate != null) {
-                Double denom = (p2o5Phosphate * qPhosphate) / 100.0;
-                if (denom != 0) ri = q29 / denom;
-            }
+    // --- CAP : Capacité de production = Q54 / Q29 ---
+    // Ignoré si Q29 trop faible (arrêt de ligne)
+    Double cap = (q29 != null && q54 != null && q29 > 0.1) ? q54 / q29 : null;
 
-            Double cap           = (q29 != null && q54 != null && q29 > 0.1) ? q54 / q29 : null;
-            Double consoH2so4    = (h2so4  != null && q29 != null && q29 != 0) ? h2so4  / q29 : null;
-            Double consoEauBrute = (eau    != null && q29 != null && q29 != 0) ? eau    / q29 : null;
-            Double consoPhos     = (phosph != null && q29 != null && q29 != 0) ? phosph / q29 : null;
-            Double consoVapeur   = (vapeur != null && q54 != null && q54 != 0) ? vapeur / q54 : null;
+    // --- Consommations spécifiques (par tonne de P2O5 produite) ---
+    Double consoH2so4    = (h2so4  != null && q29 != null && q29 != 0) ? h2so4  / q29 : null;
+    Double consoEauBrute = (eau    != null && q29 != null && q29 != 0) ? eau    / q29 : null;
+    Double consoPhos     = (phosph != null && q29 != null && q29 != 0) ? phosph / q29 : null;
+    Double consoVapeur   = (vapeur != null && q54 != null && q54 != 0) ? vapeur / q54 : null;
 
-            return IndicateursCalcules.builder()
-                    .date(dateRef)
-                    .rc(arrondir(rc))
-                    .ri(arrondir(ri))
-                    .cap(arrondir(cap))
-                    .consoH2so4(arrondir(consoH2so4))
-                    .consoEauBrute(arrondir(consoEauBrute))
-                    .consoPhosphates(arrondir(consoPhos))
-                    .consoVapeur(arrondir(consoVapeur))
-                    .build();
-        }
+    // --- Construction et retour de l'entité avec valeurs arrondies à 4 décimales ---
+    return IndicateursCalcules.builder()
+            .date(dateRef)
+            .rc(arrondir(rc))
+            .ri(arrondir(ri))
+            .cap(arrondir(cap))
+            .consoH2so4(arrondir(consoH2so4))
+            .consoEauBrute(arrondir(consoEauBrute))
+            .consoPhosphates(arrondir(consoPhos))
+            .consoVapeur(arrondir(consoVapeur))
+            .build();
+}
 
         // ── MAPPERS ───────────────────────────────────────────────────
 
