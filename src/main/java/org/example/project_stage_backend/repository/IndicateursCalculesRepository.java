@@ -11,6 +11,8 @@ import java.util.Optional;
 @Repository
 public interface IndicateursCalculesRepository extends JpaRepository<IndicateursCalcules, Long> {
 
+    Optional<IndicateursCalcules> findByDate(LocalDateTime date);
+
     List<IndicateursCalcules> findByDateBetweenOrderByDateAsc(LocalDateTime from, LocalDateTime to);
 
     Optional<IndicateursCalcules> findTopByOrderByDateDesc();

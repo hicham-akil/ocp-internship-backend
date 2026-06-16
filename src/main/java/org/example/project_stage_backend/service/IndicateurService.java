@@ -276,6 +276,14 @@
             IndicateursCalcules indicateurs = calculer(
                     dateRef, gypse.get(), phosphate.get(), production.get(), conso.get());
 
+            Optional<IndicateursCalcules> existant = indicateursRepo.findByDate(dateRef);
+            if (existant.isPresent()) {
+                indicateurs.setId(existant.get().getId());
+                log.info("Indicateurs existants trouvés pour date={} — mise à jour id={}", dateRef, indicateurs.getId());
+            } else {
+                log.info("Aucun indicateur existant pour date={} — nouvelle insertion", dateRef);
+            }
+
             IndicateursCalcules saved = indicateursRepo.save(indicateurs);
             log.info("Indicateurs calculés et sauvegardés pour date={}", dateRef);
 

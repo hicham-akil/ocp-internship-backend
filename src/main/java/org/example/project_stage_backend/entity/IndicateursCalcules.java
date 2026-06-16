@@ -5,7 +5,12 @@ import lombok.*;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "indicateurs_calcules")
+@Table(
+        name = "indicateurs_calcules",
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uk_indicateurs_date", columnNames = "date")
+        }
+)
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class IndicateursCalcules {
 
