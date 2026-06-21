@@ -19,10 +19,11 @@ public class User {
     private String passwordHash;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(nullable = false, length = 20, columnDefinition = "varchar(20)")
     private Role role;
 
     public enum Role {
+        ADMIN,   // peut gerer les utilisateurs
         LABO,    // peut saisir les pertes
         VIEWER   // lecture seule
     }

@@ -20,6 +20,7 @@ public class DataInitializer implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
+        createIfAbsent("admin",  "admin1234",  User.Role.ADMIN);
         createIfAbsent("labo",   "labo1234",   User.Role.LABO);
         createIfAbsent("viewer", "viewer1234", User.Role.VIEWER);
         seuilService.initialiserDefaults();

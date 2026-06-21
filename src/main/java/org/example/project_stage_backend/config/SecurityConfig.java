@@ -49,22 +49,23 @@ public class SecurityConfig {
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                      .requestMatchers("/auth/**").permitAll()
+    .requestMatchers("/admin/**").hasRole("ADMIN")
     .requestMatchers("/ws-jfc1/**").permitAll()
 
     .requestMatchers(
         org.springframework.http.HttpMethod.DELETE,
         "/ingest/perte/**"
-    ).hasRole("LABO")
+    ).hasAnyRole("LABO", "ADMIN")
 
     .requestMatchers(
         org.springframework.http.HttpMethod.POST,
         "/ingest/perte"
-    ).hasRole("LABO")
+    ).hasAnyRole("LABO", "ADMIN")
 
     .requestMatchers(
         org.springframework.http.HttpMethod.PUT,
         "/seuils/**"
-    ).hasRole("LABO")
+    ).hasAnyRole("LABO", "ADMIN")
 
     .requestMatchers("/ingest/**").permitAll()
 
