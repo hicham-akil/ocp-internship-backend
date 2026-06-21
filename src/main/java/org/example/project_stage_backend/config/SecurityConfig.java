@@ -55,21 +55,24 @@ public class SecurityConfig {
     .requestMatchers(
         org.springframework.http.HttpMethod.DELETE,
         "/ingest/perte/**"
-    ).hasAnyRole("LABO", "ADMIN")
+    ).hasRole("LABO")
 
     .requestMatchers(
         org.springframework.http.HttpMethod.POST,
         "/ingest/perte"
-    ).hasAnyRole("LABO", "ADMIN")
+    ).hasRole("LABO")
 
     .requestMatchers(
         org.springframework.http.HttpMethod.PUT,
         "/seuils/**"
-    ).hasAnyRole("LABO", "ADMIN")
+    ).hasRole("LABO")
 
-    .requestMatchers("/ingest/**").permitAll()
+    .requestMatchers(
+        org.springframework.http.HttpMethod.POST,
+        "/ingest/**"
+    ).permitAll()
 
-    .anyRequest().authenticated()
+    .anyRequest().hasAnyRole("LABO", "VIEWER")
                 )
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
 
